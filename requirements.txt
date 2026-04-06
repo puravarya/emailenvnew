@@ -1,4 +1,4 @@
 fastapi
 uvicorn
+gradio
 requests
-openenv-core>=0.2.0
