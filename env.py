@@ -39,6 +39,7 @@ class EmailEnv:
         return self.current_email
 
     def step(self, action):
+        action = action.lower().replace("mark_", "")  # 🔥 fix
         text = self.current_email
 
         # default reward if unknown email

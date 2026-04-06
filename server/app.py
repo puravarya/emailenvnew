@@ -2,23 +2,31 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from env import EmailEnv
 
-app = FastAPI()
-api = FastAPI()
+app = FastAPI(docs_url="/docs", redoc_url=None)
 
 env = EmailEnv()
-total_reward = 0  # 🔥 track total reward
+total_reward = 0  # track total reward
 
+
+# -------------------------
+# Request Model
+# -------------------------
 class StepRequest(BaseModel):
     action: str
 
+
 # -------------------------
-# FUNCTIONS (shared logic)
+# Helper functions
 # -------------------------
+def normalize_action(action: str):
+    return action.lower().replace("mark_", "").strip()
+
 
 def reset_env():
     global total_reward
     total_reward = 0
     state = env.reset()
+
     return {
         "observation": state,
         "reward": 0,
@@ -26,8 +34,12 @@ def reset_env():
         "done": False
     }
 
+
 def step_env(action: str):
     global total_reward
+
+    action = normalize_action(action)  # 🔥 FIX
+
     result = env.step(action)
     total_reward += result["reward"]
 
@@ -38,53 +50,28 @@ def step_env(action: str):
         "done": result["done"]
     }
 
-# -------------------------
-# API ROUTES (/api)
-# -------------------------
 
-@api.get("/health")
+# -------------------------
+# API ROUTES
+# -------------------------
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
-@api.post("/reset")
-def reset_api():
-    return reset_env()
-
-@api.post("/step")
-def step_api(req: StepRequest):
-    return step_env(req.action)
-
-@api.get("/state")
-def state_api():
-    return {
-        "observation": env.current_email,
-        "total_reward": total_reward
-    }
-
-# -------------------------
-# DIRECT ROUTES (fallback)
-# -------------------------
-
-@app.get("/health")
-def health_root():
-    return {"status": "ok"}
 
 @app.post("/reset")
-def reset_root():
+def reset():
     return reset_env()
 
+
 @app.post("/step")
-def step_root(req: StepRequest):
+def step(req: StepRequest):
     return step_env(req.action)
 
+
 @app.get("/state")
-def state_root():
+def state():
     return {
         "observation": env.current_email,
         "total_reward": total_reward
     }
-
-# -------------------------
-# MOUNT API
-# -------------------------
-app.mount("/api", api)
