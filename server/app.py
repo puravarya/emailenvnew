@@ -38,7 +38,7 @@ def reset_env():
 def step_env(action: str):
     global total_reward
 
-    action = normalize_action(action)  # 🔥 FIX
+    action = normalize_action(action)
 
     result = env.step(action)
     total_reward += result["reward"]
@@ -75,3 +75,15 @@ def state():
         "observation": env.current_email,
         "total_reward": total_reward
     }
+
+
+# -------------------------
+# MAIN ENTRY (for OpenEnv)
+# -------------------------
+def main():
+    import uvicorn
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
