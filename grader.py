@@ -2,28 +2,29 @@ from env import EmailEnv
 
 
 # -------------------------
-# SAFE SCORE FUNCTION
+# FORCE STRICT RANGE (0,1)
 # -------------------------
-def normalize_score(score):
-    # force into (0,1) range
+def clamp_score(score):
+    # push inside strict range
     if score <= 0:
-        return 0.1
-    elif score >= 1:
-        return 0.9
-    return score
+        return 0.01
+    if score >= 1:
+        return 0.99
+    return float(score)
 
 
 # -------------------------
-# EASY
+# EASY TASK
 # -------------------------
 def grade_easy():
     env = EmailEnv()
-    text = env.reset()
 
-    correct = 0
     total = 5
+    correct = 0
 
     for _ in range(total):
+        text = env.reset()
+
         if "lottery" in text or "discount" in text:
             action = "spam"
         else:
@@ -35,20 +36,21 @@ def grade_easy():
             correct += 1
 
     score = correct / total
-    return normalize_score(score)
+    return clamp_score(score)
 
 
 # -------------------------
-# MEDIUM
+# MEDIUM TASK
 # -------------------------
 def grade_medium():
     env = EmailEnv()
-    text = env.reset()
 
-    total_reward = 0
     steps = 5
+    total_reward = 0
 
     for _ in range(steps):
+        text = env.reset()
+
         if "ceo" in text or "deadline" in text:
             action = "important"
         else:
@@ -57,21 +59,24 @@ def grade_medium():
         result = env.step(action)
         total_reward += result["reward"]
 
-    score = (total_reward + steps) / (2 * steps)  # normalize roughly
-    return normalize_score(score)
+    # normalize reward → roughly between 0 and 1
+    score = (total_reward + steps) / (2 * steps)
+
+    return clamp_score(score)
 
 
 # -------------------------
-# HARD
+# HARD TASK
 # -------------------------
 def grade_hard():
     env = EmailEnv()
-    text = env.reset()
 
-    mistakes = 0
     steps = 5
+    mistakes = 0
 
     for _ in range(steps):
+        text = env.reset()
+
         if len(text) > 25:
             action = "important"
         else:
@@ -83,4 +88,5 @@ def grade_hard():
             mistakes += 1
 
     score = 1 - (mistakes / steps)
-    return normalize_score(score)
+
+    return clamp_score(score)
