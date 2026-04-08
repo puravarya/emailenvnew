@@ -2,10 +2,9 @@ from env import EmailEnv
 
 
 # -------------------------
-# FORCE STRICT RANGE (0,1)
+# SCORE NORMALIZER
 # -------------------------
-def clamp_score(score):
-    # push inside strict range
+def normalize(score):
     if score <= 0:
         return 0.01
     if score >= 1:
@@ -14,13 +13,12 @@ def clamp_score(score):
 
 
 # -------------------------
-# EASY TASK
+# TASK 1 - EASY
 # -------------------------
-def grade_easy():
+def task_easy():
     env = EmailEnv()
-
-    total = 5
     correct = 0
+    total = 5
 
     for _ in range(total):
         text = env.reset()
@@ -36,17 +34,16 @@ def grade_easy():
             correct += 1
 
     score = correct / total
-    return clamp_score(score)
+    return normalize(score)
 
 
 # -------------------------
-# MEDIUM TASK
+# TASK 2 - MEDIUM
 # -------------------------
-def grade_medium():
+def task_medium():
     env = EmailEnv()
-
-    steps = 5
     total_reward = 0
+    steps = 5
 
     for _ in range(steps):
         text = env.reset()
@@ -59,20 +56,17 @@ def grade_medium():
         result = env.step(action)
         total_reward += result["reward"]
 
-    # normalize reward → roughly between 0 and 1
     score = (total_reward + steps) / (2 * steps)
-
-    return clamp_score(score)
+    return normalize(score)
 
 
 # -------------------------
-# HARD TASK
+# TASK 3 - HARD
 # -------------------------
-def grade_hard():
+def task_hard():
     env = EmailEnv()
-
-    steps = 5
     mistakes = 0
+    steps = 5
 
     for _ in range(steps):
         text = env.reset()
@@ -88,5 +82,14 @@ def grade_hard():
             mistakes += 1
 
     score = 1 - (mistakes / steps)
+    return normalize(score)
 
-    return clamp_score(score)
+
+# -------------------------
+# REQUIRED EXPORT (IMPORTANT)
+# -------------------------
+TASKS = {
+    "easy": task_easy,
+    "medium": task_medium,
+    "hard": task_hard,
+}
