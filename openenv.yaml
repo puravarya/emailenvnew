@@ -1,4 +1,16 @@
 name: emailenvnew
-description: Email triage environment
+description: Email triage RL environment with spam detection, classification, and priority tasks
 version: 1.0
 
+tasks:
+  - id: email_classification
+    description: Classify emails as spam, important, or social
+    grader: grader.grade_easy
+
+  - id: spam_detection
+    description: Detect whether an email is spam or not spam
+    grader: grader.grade_spam_easy
+
+  - id: email_priority
+    description: Assign priority level (urgent, normal, low) to emails
+    grader: grader.grade_priority_easy

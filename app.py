@@ -1,42 +1,129 @@
-import gradio as gr
-from inference import run_inference
+from fastapi import FastAPI
+from pydantic import BaseModel
+from env import EmailEnv
+import grader as grader_module
 
-def classify_email(input_text):
-    if not input_text.strip():
-        return "⚠️ No email entered → No reward generated"
+app = FastAPI(docs_url="/docs", redoc_url=None)
 
-    result = run_inference(input_text)
+env = EmailEnv()
+total_reward = 0  # track total reward
 
-    return f"""
-📌 Predicted Action: {result['action']}
-🎯 Reward: {result['reward']}
-"""
 
-with gr.Blocks() as demo:
-    gr.Markdown("# 📧 Email Classification RL Environment")
+# -------------------------
+# Request Model
+# -------------------------
+class StepRequest(BaseModel):
+    action: str
 
-    gr.Markdown(
-        "Each click generates a RANDOM classification (spam / important / social) and reward based on predefined rules."
-    )
 
-    gr.Markdown("### ✍️ Try your own email:")
-    input_box = gr.Textbox(placeholder="Type email here...")
+# -------------------------
+# Helper functions
+# -------------------------
+def normalize_action(action: str):
+    return action.lower().replace("mark_", "").strip()
 
-    output_box = gr.Textbox(label="Result")
 
-    btn = gr.Button("Classify Email")
-    btn.click(fn=classify_email, inputs=input_box, outputs=output_box)
+def reset_env():
+    global total_reward
+    total_reward = 0
+    state = env.reset()
 
-    gr.Markdown("### 💡 Example Emails:")
-    gr.Markdown("""
-- Win a lottery now!!!
-- Meeting with CEO tomorrow
-- Huge discount just for you
-- Project deadline tomorrow
-- Claim your prize now!!!
-- We have Christmas celebration tomorrow at office
-- Vogue Magazine 2026
-- I-max theatre experience
-""")
+    return {
+        "observation": state,
+        "reward": 0,
+        "total_reward": total_reward,
+        "done": False
+    }
 
-demo.launch(server_name="0.0.0.0", server_port=7860)
+
+def step_env(action: str):
+    global total_reward
+
+    action = normalize_action(action)
+
+    result = env.step(action)
+    total_reward += result["reward"]
+
+    return {
+        "observation": result["observation"],
+        "reward": result["reward"],
+        "total_reward": total_reward,
+        "done": result["done"]
+    }
+
+
+# -------------------------
+# API ROUTES
+# -------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/reset")
+def reset():
+    return reset_env()
+
+
+@app.post("/step")
+def step(req: StepRequest):
+    return step_env(req.action)
+
+
+@app.get("/state")
+def state():
+    return {
+        "observation": env.current_email,
+        "total_reward": total_reward
+    }
+
+
+# -------------------------
+# GRADER ENDPOINT (required by validator)
+# Returns scores for all 3 tasks
+# -------------------------
+@app.get("/grader")
+def grader():
+    return {
+        "tasks": [
+            {
+                "id": "email_classification",
+                "description": "Classify emails as spam, important, or social",
+                "scores": {
+                    "easy": grader_module.grade_easy(),
+                    "medium": grader_module.grade_medium(),
+                    "hard": grader_module.grade_hard()
+                }
+            },
+            {
+                "id": "spam_detection",
+                "description": "Detect whether an email is spam or not spam",
+                "scores": {
+                    "easy": grader_module.grade_spam_easy(),
+                    "medium": grader_module.grade_spam_medium(),
+                    "hard": grader_module.grade_spam_hard()
+                }
+            },
+            {
+                "id": "email_priority",
+                "description": "Assign priority level (urgent, normal, low) to emails",
+                "scores": {
+                    "easy": grader_module.grade_priority_easy(),
+                    "medium": grader_module.grade_priority_medium(),
+                    "hard": grader_module.grade_priority_hard()
+                }
+            }
+        ]
+    }
+
+
+# -------------------------
+# MAIN ENTRY (for OpenEnv)
+# -------------------------
+def main():
+    import uvicorn
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
