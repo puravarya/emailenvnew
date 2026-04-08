@@ -1,9 +1,6 @@
 from env import EmailEnv
 
 
-# -------------------------
-# FORCE SCORE IN (0,1)
-# -------------------------
 def clamp(score):
     if score <= 0:
         return 0.01
@@ -12,9 +9,6 @@ def clamp(score):
     return float(score)
 
 
-# -------------------------
-# EASY
-# -------------------------
 def grade_easy():
     env = EmailEnv()
     total = 5
@@ -33,13 +27,9 @@ def grade_easy():
         if result["reward"] > 0:
             correct += 1
 
-    score = correct / total
-    return clamp(score)
+    return clamp(correct / total)
 
 
-# -------------------------
-# MEDIUM
-# -------------------------
 def grade_medium():
     env = EmailEnv()
     steps = 5
@@ -60,9 +50,6 @@ def grade_medium():
     return clamp(score)
 
 
-# -------------------------
-# HARD
-# -------------------------
 def grade_hard():
     env = EmailEnv()
     steps = 5
