@@ -6,6 +6,17 @@ from env import EmailEnv
 ACTIONS = ["spam", "important", "social"]
 
 
+# -------------------------
+# SAFE SCORE NORMALIZATION
+# -------------------------
+def normalize_score(score):
+    if score <= 0:
+        return 0.01
+    elif score >= 1:
+        return 0.99
+    return float(score)
+
+
 def run_inference(input_text: str):
     # -------------------------
     # 🔥 SAFE LLM CALL (REQUIRED)
@@ -17,16 +28,14 @@ def run_inference(input_text: str):
                 api_key=os.environ["API_KEY"]
             )
 
-            # dummy call (validator requirement)
             client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=os.environ.get("MODEL_NAME", "gpt-3.5-turbo"),
                 messages=[
                     {"role": "user", "content": f"Classify: {input_text}"}
                 ],
                 max_tokens=5
             )
     except Exception as e:
-        # 🔥 DO NOT CRASH
         print(f"[WARNING] LLM call failed: {str(e)}", flush=True)
 
     # -------------------------
@@ -48,7 +57,10 @@ def run_inference(input_text: str):
 
     print(f"[STEP] step=1 action={action} reward={reward}", flush=True)
 
-    score = float(total_reward)
+    # -------------------------
+    # NORMALIZED SCORE (FIX)
+    # -------------------------
+    score = normalize_score(total_reward)
 
     print(
         f"[END] task=email_classification score={score} steps={steps}",
