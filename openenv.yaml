@@ -2,12 +2,3 @@ name: emailenvnew
 description: Email triage environment
 version: 1.0
 
-tasks:
-  - name: easy
-    grader: grader:grade_easy
-
-  - name: medium
-    grader: grader:grade_medium
-
-  - name: hard
-    grader: grader:grade_hard
