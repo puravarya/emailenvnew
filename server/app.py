@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Ensure root-level modules (env.py, grader.py) are importable from server/
+# Ensure root-level modules are importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI
@@ -16,14 +16,10 @@ total_reward = 0.0
 
 
 # -------------------------
-# Request Models
+# Request Model
 # -------------------------
 class StepRequest(BaseModel):
     action: str
-
-
-class GraderRequest(BaseModel):
-    task_id: str  # email_classification | spam_detection | email_priority
 
 
 # -------------------------
@@ -37,24 +33,32 @@ def reset_env():
     global total_reward
     total_reward = 0.0
     state = env.reset()
-    return {"observation": state, "reward": 0.0, "total_reward": total_reward, "done": False}
+    return {
+        "observation": state,
+        "reward": 0.0,
+        "total_reward": total_reward,
+        "done": False
+    }
 
 
 def step_env(action: str):
     global total_reward
+
     action = normalize_action(action)
     result = env.step(action)
+
     total_reward += result["reward"]
+
     return {
         "observation": result["observation"],
         "reward": result["reward"],
         "total_reward": total_reward,
-        "done": result["done"],
+        "done": result["done"]
     }
 
 
 # -------------------------
-# Standard endpoints
+# API ROUTES
 # -------------------------
 @app.get("/health")
 def health():
@@ -73,111 +77,63 @@ def step(req: StepRequest):
 
 @app.get("/state")
 def state():
-    return {"observation": env.current_email, "total_reward": total_reward}
+    return {
+        "observation": env.current_email,
+        "total_reward": total_reward
+    }
 
 
 # -------------------------
-# /tasks  — enumerate all 3 tasks (validator reads this)
+# TASKS ENDPOINT (REQUIRED)
 # -------------------------
 @app.get("/tasks")
-def list_tasks():
+def tasks():
     return {
         "tasks": [
             {
                 "task_id": "email_classification",
-                "description": "Classify an email as spam, important, or social",
-                "difficulty": "easy",
-                "actions": ["spam", "important", "social"],
+                "description": "Classify emails as spam, important, or social",
+                "actions": ["spam", "important", "social"]
             },
             {
                 "task_id": "spam_detection",
                 "description": "Detect whether an email is spam or not_spam",
-                "difficulty": "medium",
-                "actions": ["spam", "not_spam"],
+                "actions": ["spam", "not_spam"]
             },
             {
                 "task_id": "email_priority",
-                "description": "Assign priority (urgent, normal, low) to an email",
-                "difficulty": "hard",
-                "actions": ["urgent", "normal", "low"],
-            },
+                "description": "Assign priority (urgent, normal, low)",
+                "actions": ["urgent", "normal", "low"]
+            }
         ]
     }
 
 
 # -------------------------
-# /grader  — run grader for a task (validator calls this)
-# Returns scores in 0.0–1.0 for easy/medium/hard difficulties
-# -------------------------
-@app.post("/grader")
-def run_grader(req: GraderRequest):
-    task_id = req.task_id.strip().lower()
-
-    if task_id == "email_classification":
-        scores = {
-            "easy":   grader_module.grade_easy(),
-            "medium": grader_module.grade_medium(),
-            "hard":   grader_module.grade_hard(),
-        }
-    elif task_id == "spam_detection":
-        scores = {
-            "easy":   grader_module.grade_spam_easy(),
-            "medium": grader_module.grade_spam_medium(),
-            "hard":   grader_module.grade_spam_hard(),
-        }
-    elif task_id == "email_priority":
-        scores = {
-            "easy":   grader_module.grade_priority_easy(),
-            "medium": grader_module.grade_priority_medium(),
-            "hard":   grader_module.grade_priority_hard(),
-        }
-    else:
-        return {"error": f"Unknown task_id: {task_id}"}
-
-    return {
-        "task_id": task_id,
-        "scores": scores,
-        "score": scores["easy"],   # top-level score = easy difficulty
-    }
-
-
-# -------------------------
-# /grader GET fallback — runs all tasks at once
+# GRADER ENDPOINT (CRITICAL FIX)
 # -------------------------
 @app.get("/grader")
-def run_all_graders():
+def grader():
     return {
         "tasks": [
             {
                 "task_id": "email_classification",
-                "scores": {
-                    "easy":   grader_module.grade_easy(),
-                    "medium": grader_module.grade_medium(),
-                    "hard":   grader_module.grade_hard(),
-                },
+                "score": grader_module.grade_easy()
             },
             {
                 "task_id": "spam_detection",
-                "scores": {
-                    "easy":   grader_module.grade_spam_easy(),
-                    "medium": grader_module.grade_spam_medium(),
-                    "hard":   grader_module.grade_spam_hard(),
-                },
+                "score": grader_module.grade_spam_easy()
             },
             {
                 "task_id": "email_priority",
-                "scores": {
-                    "easy":   grader_module.grade_priority_easy(),
-                    "medium": grader_module.grade_priority_medium(),
-                    "hard":   grader_module.grade_priority_hard(),
-                },
-            },
+                "score": grader_module.grade_priority_easy()
+            }
         ]
     }
 
 
 # -------------------------
-# Main entry
+# MAIN ENTRY (OpenEnv requirement)
 # -------------------------
 def main():
     import uvicorn
