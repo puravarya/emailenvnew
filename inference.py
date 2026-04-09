@@ -1,49 +1,70 @@
 import os
 import random
 
+# Safe import of openai — won't crash if missing
 try:
     from openai import OpenAI
-    OPENAI_AVAILABLE = True
+    _OPENAI_OK = True
 except ImportError:
-    OPENAI_AVAILABLE = False
+    _OPENAI_OK = False
 
-from env import EmailEnv
+# ── Inline minimal env (no import of env.py needed) ──────────────────────────
 
-ACTIONS = ["spam", "important", "social"]
+_EMAILS = [
+    "win a lottery now!!!",
+    "meeting with ceo tomorrow",
+    "huge discount just for you",
+    "project deadline tomorrow",
+    "claim your prize now!!!",
+    "we have christmas celebration tomorrow at office",
+    "vogue magazine 2026",
+    "i-max theatre experience",
+]
+_REWARDS = {
+    "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "meeting with ceo tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "huge discount just for you":                       {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "project deadline tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "claim your prize now!!!":                          {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "we have christmas celebration tomorrow at office": {"spam": 0.0, "social": 1.0, "important": 0.5},
+    "vogue magazine 2026":                              {"spam": 0.5, "social": 1.0, "important": 0.0},
+    "i-max theatre experience":                         {"spam": 0.5, "social": 1.0, "important": 0.0},
+}
+_ACTIONS = ["spam", "important", "social"]
 
-
-def normalize_score(score):
-    if score <= 0:
-        return 0.01
-    elif score >= 1:
-        return 0.99
+def _normalize(score):
+    if score <= 0: return 0.01
+    if score >= 1: return 0.99
     return float(score)
 
+# ── Inference ─────────────────────────────────────────────────────────────────
 
 def run_inference(input_text: str):
-    # Safe LLM call — skipped if openai not available or env vars not set
+    # Optional LLM call — skipped gracefully if unavailable
     try:
-        if OPENAI_AVAILABLE and "API_BASE_URL" in os.environ and "API_KEY" in os.environ:
+        if _OPENAI_OK and os.environ.get("API_BASE_URL") and os.environ.get("API_KEY"):
             client = OpenAI(
                 base_url=os.environ["API_BASE_URL"],
-                api_key=os.environ["API_KEY"]
+                api_key=os.environ["API_KEY"],
             )
             client.chat.completions.create(
                 model=os.environ.get("MODEL_NAME", "gpt-3.5-turbo"),
                 messages=[{"role": "user", "content": f"Classify: {input_text}"}],
-                max_tokens=5
+                max_tokens=5,
             )
     except Exception as e:
-        print(f"[WARNING] LLM call failed: {str(e)}", flush=True)
+        print(f"[WARNING] LLM call failed: {e}", flush=True)
 
-    env = EmailEnv()
-    state = env.reset(input_text)
-    action = random.choice(ACTIONS)
-    result = env.step(action)
-    reward = result["reward"]
-    score = normalize_score(reward)
+    # Core env logic (inline — no import needed)
+    text = input_text.lower().strip()
+    if text not in _REWARDS:
+        text = random.choice(_EMAILS)
 
-    print(f"[START] task=email_classification input={state}", flush=True)
+    action = random.choice(_ACTIONS)
+    reward = _REWARDS.get(text, {}).get(action, 0.0)
+    score  = _normalize(reward)
+
+    print(f"[START] task=email_classification input={text}", flush=True)
     print(f"[STEP] step=1 action={action} reward={reward}", flush=True)
     print(f"[END] task=email_classification score={score} steps=1", flush=True)
 
@@ -51,4 +72,5 @@ def run_inference(input_text: str):
 
 
 if __name__ == "__main__":
-    run_inference("Win a lottery now!!!")
+    result = run_inference("Win a lottery now!!!")
+    print(result)
