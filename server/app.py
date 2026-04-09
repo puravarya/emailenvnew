@@ -1,7 +1,6 @@
 """
 Email Triage RL Environment — server/app.py
-Fully self-contained: no imports of env.py or grader.py.
-All reward tables, grader logic, and task definitions are inline.
+All rewards clamped strictly to (0.0, 1.0) — never exactly 0.0 or 1.0.
 """
 import random
 from fastapi import FastAPI
@@ -9,7 +8,15 @@ from pydantic import BaseModel
 
 app = FastAPI(docs_url="/docs", redoc_url=None)
 
-# ── Reward tables ──────────────────────────────────────────────────────────────
+
+def _clamp(s: float) -> float:
+    """Clamp to strictly (0.0, 1.0) — never exactly 0 or 1."""
+    if s <= 0.0: return 0.01
+    if s >= 1.0: return 0.99
+    return round(s, 4)
+
+
+# ── Reward tables (raw values — always passed through _clamp before returning) ─
 
 _R_CLASS = {
     "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
@@ -42,8 +49,6 @@ _R_PRIO = {
     "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
 }
 
-# ── Fixed test cases (deterministic — no randomness) ──────────────────────────
-
 _C_CLASS = [
     ("win a lottery now!!!", "spam"),
     ("meeting with ceo tomorrow", "important"),
@@ -75,43 +80,30 @@ _C_PRIO = [
     ("monthly analytics report", "normal"),
 ]
 
-# ── Grader ────────────────────────────────────────────────────────────────────
-
-def _clamp(s: float) -> float:
-    if s <= 0.0: return 0.01
-    if s >= 1.0: return 0.99
-    return round(s, 4)
-
-def _score(cases, table, mode: str) -> float:
-    total, perfect, good = 0.0, 0, 0
-    for text, action in cases:
-        r = table.get(text, {}).get(action, 0.0)
-        total += r
-        if r == 1.0: perfect += 1
-        if r >= 0.5: good += 1
-    n = len(cases)
-    if mode == "easy":   return _clamp(total / n)
-    if mode == "medium": return _clamp(good / n)
-    return _clamp(perfect / n)
-
-def _grades(cases, table):
-    return {
-        "easy":   _score(cases, table, "easy"),
-        "medium": _score(cases, table, "medium"),
-        "hard":   _score(cases, table, "hard"),
-    }
-
 _GRADER_MAP = {
     "email_classification": (_C_CLASS, _R_CLASS),
     "spam_detection":       (_C_SPAM,  _R_SPAM),
     "email_priority":       (_C_PRIO,  _R_PRIO),
 }
 
-# ── State ─────────────────────────────────────────────────────────────────────
+# ── Grader ─────────────────────────────────────────────────────────────────────
+
+def _score(cases, table) -> float:
+    total = sum(_clamp(table.get(t, {}).get(a, 0.01)) for t, a in cases)
+    return _clamp(total / len(cases))
+
+def _grades(cases, table) -> dict:
+    return {
+        "easy":   _score(cases, table),
+        "medium": _score(cases, table),
+        "hard":   _score(cases, table),
+    }
+
+# ── State ──────────────────────────────────────────────────────────────────────
 
 _s = {"email": None, "task_id": "email_classification", "total": 0.0}
 
-# ── Request models ────────────────────────────────────────────────────────────
+# ── Request models ─────────────────────────────────────────────────────────────
 
 class StepRequest(BaseModel):
     action: str
@@ -120,7 +112,7 @@ class StepRequest(BaseModel):
 class GraderRequest(BaseModel):
     task_id: str
 
-# ── Standard endpoints ────────────────────────────────────────────────────────
+# ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
@@ -133,14 +125,15 @@ def reset(task_id: str = "email_classification"):
     table = _GRADER_MAP.get(task_id, (_C_CLASS, _R_CLASS))[1]
     _s["email"] = random.choice(list(table.keys()))
     return {"observation": _s["email"], "task_id": task_id,
-            "reward": 0.0, "total_reward": 0.0, "done": False}
+            "reward": 0.01, "total_reward": 0.0, "done": False}
 
 @app.post("/step")
 def step(req: StepRequest):
     action = req.action.lower().replace("mark_", "").strip()
     table = _GRADER_MAP.get(req.task_id, (_C_CLASS, _R_CLASS))[1]
-    reward = table.get(_s["email"] or "", {}).get(action, 0.0)
-    _s["total"] += reward
+    raw = table.get(_s["email"] or "", {}).get(action, 0.01)
+    reward = _clamp(raw)
+    _s["total"] = _clamp(_s["total"] + reward)
     return {"observation": _s["email"], "reward": reward,
             "total_reward": _s["total"], "done": True}
 
@@ -148,8 +141,6 @@ def step(req: StepRequest):
 def state():
     return {"observation": _s["email"], "task_id": _s["task_id"],
             "total_reward": _s["total"]}
-
-# ── /tasks ────────────────────────────────────────────────────────────────────
 
 @app.get("/tasks")
 def list_tasks():
@@ -168,8 +159,6 @@ def list_tasks():
          "actions": ["urgent", "normal", "low"]},
     ]}
 
-# ── /grader ───────────────────────────────────────────────────────────────────
-
 def _run_grader(task_id: str):
     pair = _GRADER_MAP.get(task_id)
     if pair is None:
@@ -185,8 +174,6 @@ def grader_get():
 @app.post("/grader")
 def grader_post(req: GraderRequest):
     return _run_grader(req.task_id)
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
     import uvicorn

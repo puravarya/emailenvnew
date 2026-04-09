@@ -1,12 +1,14 @@
 """
 grader.py — Deterministic graders for all 3 tasks.
-
-The TASKS list is the canonical declaration of tasks with graders.
-Each entry has: task_id, description, difficulty, and grader_fn.
-grader_fn must return a float strictly in (0.0, 1.0).
+All scores strictly in (0.0, 1.0) — never exactly 0.0 or 1.0.
 """
 
-# ── Reward tables ──────────────────────────────────────────────────────────────
+
+def _clamp(s: float) -> float:
+    if s <= 0.0: return 0.01
+    if s >= 1.0: return 0.99
+    return round(s, 4)
+
 
 _R_CLASS = {
     "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
@@ -39,8 +41,6 @@ _R_PRIO = {
     "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
 }
 
-# ── Fixed test cases (deterministic) ──────────────────────────────────────────
-
 _C_CLASS = [
     ("win a lottery now!!!", "spam"),
     ("meeting with ceo tomorrow", "important"),
@@ -72,39 +72,26 @@ _C_PRIO = [
     ("monthly analytics report", "normal"),
 ]
 
-# ── Core grader logic ──────────────────────────────────────────────────────────
-
-def _clamp(s: float) -> float:
-    if s <= 0.0: return 0.01
-    if s >= 1.0: return 0.99
-    return round(s, 4)
-
 
 def _run(cases, table) -> float:
-    """Average reward across all fixed test cases."""
-    total = sum(table.get(t, {}).get(a, 0.0) for t, a in cases)
+    """Average clamped reward across all fixed test cases."""
+    total = sum(_clamp(table.get(t, {}).get(a, 0.01)) for t, a in cases)
     return _clamp(total / len(cases))
 
 
-# ── Public grader functions ────────────────────────────────────────────────────
-
 def grade_email_classification() -> float:
-    """Task 1 (easy): classify emails as spam / important / social."""
     return _run(_C_CLASS, _R_CLASS)
 
 
 def grade_spam_detection() -> float:
-    """Task 2 (medium): binary spam vs not_spam detection."""
     return _run(_C_SPAM, _R_SPAM)
 
 
 def grade_email_priority() -> float:
-    """Task 3 (hard): assign urgent / normal / low priority."""
     return _run(_C_PRIO, _R_PRIO)
 
 
-# ── TASKS list — required by openenv validate ──────────────────────────────────
-
+# Required by openenv validate — scans for TASKS list
 TASKS = [
     {
         "task_id":     "email_classification",
@@ -130,17 +117,8 @@ TASKS = [
 ]
 
 
-# ── Convenience: run all graders ───────────────────────────────────────────────
-
-def run_all():
-    results = {}
+if __name__ == "__main__":
     for task in TASKS:
         score = task["grader_fn"]()
-        results[task["task_id"]] = score
-        print(f"  {task['task_id']}: {score}")
-    return results
-
-
-if __name__ == "__main__":
-    print("Running all graders:")
-    run_all()
+        assert 0.0 < score < 1.0, f"FAIL: {task['task_id']} = {score}"
+        print(f"PASS  {task['task_id']} = {score}")
