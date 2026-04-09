@@ -1,28 +1,47 @@
 """
-Deterministic graders for all 3 tasks.
-Each grader runs fixed test cases and returns a score in (0.0, 1.0).
-No randomness - same inputs, same outputs every time.
+grader.py — Deterministic graders for all 3 tasks.
+
+The TASKS list is the canonical declaration of tasks with graders.
+Each entry has: task_id, description, difficulty, and grader_fn.
+grader_fn must return a float strictly in (0.0, 1.0).
 """
 
-from env import EmailEnv, SpamDetectorEnv, EmailPriorityEnv
+# ── Reward tables ──────────────────────────────────────────────────────────────
 
+_R_CLASS = {
+    "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "meeting with ceo tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "huge discount just for you":                       {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "project deadline tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "claim your prize now!!!":                          {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "we have christmas celebration tomorrow at office": {"spam": 0.0, "social": 1.0, "important": 0.5},
+    "vogue magazine 2026":                              {"spam": 0.5, "social": 1.0, "important": 0.0},
+    "i-max theatre experience":                         {"spam": 0.5, "social": 1.0, "important": 0.0},
+}
+_R_SPAM = {
+    "click here to win iphone":           {"spam": 1.0, "not_spam": 0.0},
+    "your invoice is attached":           {"spam": 0.0, "not_spam": 1.0},
+    "congratulations you won $1000":      {"spam": 1.0, "not_spam": 0.0},
+    "team standup at 10am":               {"spam": 0.0, "not_spam": 1.0},
+    "limited offer buy now":              {"spam": 1.0, "not_spam": 0.0},
+    "please review the attached report":  {"spam": 0.0, "not_spam": 1.0},
+    "you have been selected for a prize": {"spam": 1.0, "not_spam": 0.0},
+    "quarterly review meeting invite":    {"spam": 0.0, "not_spam": 1.0},
+}
+_R_PRIO = {
+    "server is down production issue":       {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "happy birthday wishes":                 {"urgent": 0.0, "normal": 0.3, "low": 1.0},
+    "client contract needs signature today": {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "newsletter subscription confirmed":     {"urgent": 0.0, "normal": 0.3, "low": 1.0},
+    "critical bug in live system":           {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "weekly team lunch reminder":            {"urgent": 0.0, "normal": 0.5, "low": 1.0},
+    "urgent approval needed for budget":     {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
+}
 
-def _clamp(score):
-    """Force score strictly inside (0.0, 1.0)."""
-    if score <= 0.0:
-        return 0.01
-    if score >= 1.0:
-        return 0.99
-    return round(float(score), 4)
+# ── Fixed test cases (deterministic) ──────────────────────────────────────────
 
-
-# ==============================================================
-# TASK 1: Email Classification  (spam / important / social)
-# ==============================================================
-
-# Fixed test cases - same order every time (deterministic)
-TASK1_CASES = [
-    # (email_text, correct_action)
+_C_CLASS = [
     ("win a lottery now!!!", "spam"),
     ("meeting with ceo tomorrow", "important"),
     ("huge discount just for you", "spam"),
@@ -32,67 +51,7 @@ TASK1_CASES = [
     ("vogue magazine 2026", "social"),
     ("i-max theatre experience", "social"),
 ]
-
-
-def grade_easy():
-    """
-    Task 1 Easy: Classify obvious spam vs important emails.
-    Only uses clear-cut cases with strong keyword signals.
-    """
-    env = EmailEnv()
-    cases = [
-        ("win a lottery now!!!", "spam"),
-        ("meeting with ceo tomorrow", "important"),
-        ("huge discount just for you", "spam"),
-        ("project deadline tomorrow", "important"),
-        ("claim your prize now!!!", "spam"),
-    ]
-    total_reward = 0.0
-    for text, action in cases:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(cases)
-    return _clamp(score)
-
-
-def grade_medium():
-    """
-    Task 1 Medium: All 8 emails including social category.
-    Requires distinguishing social from spam and important.
-    """
-    env = EmailEnv()
-    total_reward = 0.0
-    for text, action in TASK1_CASES:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(TASK1_CASES)
-    return _clamp(score)
-
-
-def grade_hard():
-    """
-    Task 1 Hard: Penalizes wrong classifications heavily.
-    Score only counts emails classified correctly (reward == 1.0).
-    Partial-credit (social=0.5) does not count as correct here.
-    """
-    env = EmailEnv()
-    perfect = 0
-    for text, action in TASK1_CASES:
-        env.reset(text)
-        result = env.step(action)
-        if result["reward"] == 1.0:
-            perfect += 1
-    score = perfect / len(TASK1_CASES)
-    return _clamp(score)
-
-
-# ==============================================================
-# TASK 2: Spam Detection  (spam / not_spam)
-# ==============================================================
-
-TASK2_CASES = [
+_C_SPAM = [
     ("click here to win iphone", "spam"),
     ("your invoice is attached", "not_spam"),
     ("congratulations you won $1000", "spam"),
@@ -102,58 +61,7 @@ TASK2_CASES = [
     ("you have been selected for a prize", "spam"),
     ("quarterly review meeting invite", "not_spam"),
 ]
-
-
-def grade_spam_easy():
-    """
-    Task 2 Easy: Classify 4 obvious spam/not-spam emails.
-    """
-    env = SpamDetectorEnv()
-    cases = TASK2_CASES[:4]
-    total_reward = 0.0
-    for text, action in cases:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(cases)
-    return _clamp(score)
-
-
-def grade_spam_medium():
-    """
-    Task 2 Medium: All 8 spam/not-spam emails.
-    """
-    env = SpamDetectorEnv()
-    total_reward = 0.0
-    for text, action in TASK2_CASES:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(TASK2_CASES)
-    return _clamp(score)
-
-
-def grade_spam_hard():
-    """
-    Task 2 Hard: Requires perfect binary classification.
-    Any wrong answer (false positive or false negative) reduces score.
-    """
-    env = SpamDetectorEnv()
-    correct = 0
-    for text, action in TASK2_CASES:
-        env.reset(text)
-        result = env.step(action)
-        if result["reward"] == 1.0:
-            correct += 1
-    score = correct / len(TASK2_CASES)
-    return _clamp(score)
-
-
-# ==============================================================
-# TASK 3: Email Priority  (urgent / normal / low)
-# ==============================================================
-
-TASK3_CASES = [
+_C_PRIO = [
     ("server is down production issue", "urgent"),
     ("happy birthday wishes", "low"),
     ("client contract needs signature today", "urgent"),
@@ -164,72 +72,75 @@ TASK3_CASES = [
     ("monthly analytics report", "normal"),
 ]
 
+# ── Core grader logic ──────────────────────────────────────────────────────────
 
-def grade_priority_easy():
-    """
-    Task 3 Easy: 4 cases with very obvious urgency signals.
-    """
-    env = EmailPriorityEnv()
-    cases = [
-        ("server is down production issue", "urgent"),
-        ("happy birthday wishes", "low"),
-        ("critical bug in live system", "urgent"),
-        ("newsletter subscription confirmed", "low"),
-    ]
-    total_reward = 0.0
-    for text, action in cases:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(cases)
-    return _clamp(score)
+def _clamp(s: float) -> float:
+    if s <= 0.0: return 0.01
+    if s >= 1.0: return 0.99
+    return round(s, 4)
 
 
-def grade_priority_medium():
-    """
-    Task 3 Medium: All 8 priority cases including normal.
-    """
-    env = EmailPriorityEnv()
-    total_reward = 0.0
-    for text, action in TASK3_CASES:
-        env.reset(text)
-        result = env.step(action)
-        total_reward += result["reward"]
-    score = total_reward / len(TASK3_CASES)
-    return _clamp(score)
+def _run(cases, table) -> float:
+    """Average reward across all fixed test cases."""
+    total = sum(table.get(t, {}).get(a, 0.0) for t, a in cases)
+    return _clamp(total / len(cases))
 
 
-def grade_priority_hard():
-    """
-    Task 3 Hard: Must correctly distinguish urgent/normal/low perfectly.
-    Only counts reward == 1.0 (exact correct label).
-    """
-    env = EmailPriorityEnv()
-    perfect = 0
-    for text, action in TASK3_CASES:
-        env.reset(text)
-        result = env.step(action)
-        if result["reward"] == 1.0:
-            perfect += 1
-    score = perfect / len(TASK3_CASES)
-    return _clamp(score)
+# ── Public grader functions ────────────────────────────────────────────────────
+
+def grade_email_classification() -> float:
+    """Task 1 (easy): classify emails as spam / important / social."""
+    return _run(_C_CLASS, _R_CLASS)
 
 
-# ==============================================================
-# Run all graders (for testing)
-# ==============================================================
+def grade_spam_detection() -> float:
+    """Task 2 (medium): binary spam vs not_spam detection."""
+    return _run(_C_SPAM, _R_SPAM)
+
+
+def grade_email_priority() -> float:
+    """Task 3 (hard): assign urgent / normal / low priority."""
+    return _run(_C_PRIO, _R_PRIO)
+
+
+# ── TASKS list — required by openenv validate ──────────────────────────────────
+
+TASKS = [
+    {
+        "task_id":     "email_classification",
+        "description": "Classify each email as spam, important, or social",
+        "difficulty":  "easy",
+        "actions":     ["spam", "important", "social"],
+        "grader_fn":   grade_email_classification,
+    },
+    {
+        "task_id":     "spam_detection",
+        "description": "Detect whether an email is spam or not_spam",
+        "difficulty":  "medium",
+        "actions":     ["spam", "not_spam"],
+        "grader_fn":   grade_spam_detection,
+    },
+    {
+        "task_id":     "email_priority",
+        "description": "Assign priority level urgent, normal, or low to an email",
+        "difficulty":  "hard",
+        "actions":     ["urgent", "normal", "low"],
+        "grader_fn":   grade_email_priority,
+    },
+]
+
+
+# ── Convenience: run all graders ───────────────────────────────────────────────
+
+def run_all():
+    results = {}
+    for task in TASKS:
+        score = task["grader_fn"]()
+        results[task["task_id"]] = score
+        print(f"  {task['task_id']}: {score}")
+    return results
+
+
 if __name__ == "__main__":
-    print("=== TASK 1: Email Classification ===")
-    print(f"  Easy:   {grade_easy()}")
-    print(f"  Medium: {grade_medium()}")
-    print(f"  Hard:   {grade_hard()}")
-
-    print("\n=== TASK 2: Spam Detection ===")
-    print(f"  Easy:   {grade_spam_easy()}")
-    print(f"  Medium: {grade_spam_medium()}")
-    print(f"  Hard:   {grade_spam_hard()}")
-
-    print("\n=== TASK 3: Email Priority ===")
-    print(f"  Easy:   {grade_priority_easy()}")
-    print(f"  Medium: {grade_priority_medium()}")
-    print(f"  Hard:   {grade_priority_hard()}")
+    print("Running all graders:")
+    run_all()
