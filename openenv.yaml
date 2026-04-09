@@ -1,3 +1,4 @@
 name: emailenvnew
 version: "1.0"
 description: Email triage RL environment with 3 tasks - classification, spam detection, and priority
+ 

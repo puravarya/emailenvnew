@@ -1,116 +1,89 @@
 """
-Email Triage RL Environment - server/app.py
-All logic is self-contained here to avoid import path issues in Docker.
+Email Triage RL Environment — server/app.py
+Completely self-contained: all task data, reward logic, and graders are
+defined here so there are zero import failures inside Docker.
 """
-import sys
-import os
-
-# Add root to path so env.py and grader.py can be imported
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
+import random
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 app = FastAPI(docs_url="/docs", redoc_url=None)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# REWARD TABLES (one per task)
+# ──────────────────────────────────────────────────────────────────────────────
 
-# ============================================================
-# TASK DEFINITIONS - all 3 tasks with their reward tables
-# ============================================================
-
-TASK_EMAIL_CLASSIFICATION = {
-    "task_id": "email_classification",
-    "description": "Classify each email as spam, important, or social",
-    "difficulty": "easy",
-    "actions": ["spam", "important", "social"],
-    "test_cases": [
-        ("win a lottery now!!!", "spam"),
-        ("meeting with ceo tomorrow", "important"),
-        ("huge discount just for you", "spam"),
-        ("project deadline tomorrow", "important"),
-        ("claim your prize now!!!", "spam"),
-        ("we have christmas celebration tomorrow at office", "social"),
-        ("vogue magazine 2026", "social"),
-        ("i-max theatre experience", "social"),
-    ],
-    "reward_table": {
-        "win a lottery now!!!":                              {"spam": 1.0, "social": 0.5, "important": 0.0},
-        "meeting with ceo tomorrow":                         {"spam": 0.0, "social": 0.5, "important": 1.0},
-        "huge discount just for you":                        {"spam": 1.0, "social": 0.5, "important": 0.0},
-        "project deadline tomorrow":                         {"spam": 0.0, "social": 0.5, "important": 1.0},
-        "claim your prize now!!!":                           {"spam": 1.0, "social": 0.5, "important": 0.0},
-        "we have christmas celebration tomorrow at office":  {"spam": 0.0, "social": 1.0, "important": 0.5},
-        "vogue magazine 2026":                               {"spam": 0.5, "social": 1.0, "important": 0.0},
-        "i-max theatre experience":                          {"spam": 0.5, "social": 1.0, "important": 0.0},
-    },
+_CLASSIFICATION_REWARDS = {
+    "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "meeting with ceo tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "huge discount just for you":                       {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "project deadline tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
+    "claim your prize now!!!":                          {"spam": 1.0, "social": 0.5, "important": 0.0},
+    "we have christmas celebration tomorrow at office": {"spam": 0.0, "social": 1.0, "important": 0.5},
+    "vogue magazine 2026":                              {"spam": 0.5, "social": 1.0, "important": 0.0},
+    "i-max theatre experience":                         {"spam": 0.5, "social": 1.0, "important": 0.0},
 }
 
-TASK_SPAM_DETECTION = {
-    "task_id": "spam_detection",
-    "description": "Detect whether an email is spam or not_spam (binary classification)",
-    "difficulty": "medium",
-    "actions": ["spam", "not_spam"],
-    "test_cases": [
-        ("click here to win iphone", "spam"),
-        ("your invoice is attached", "not_spam"),
-        ("congratulations you won $1000", "spam"),
-        ("team standup at 10am", "not_spam"),
-        ("limited offer buy now", "spam"),
-        ("please review the attached report", "not_spam"),
-        ("you have been selected for a prize", "spam"),
-        ("quarterly review meeting invite", "not_spam"),
-    ],
-    "reward_table": {
-        "click here to win iphone":           {"spam": 1.0, "not_spam": 0.0},
-        "your invoice is attached":            {"spam": 0.0, "not_spam": 1.0},
-        "congratulations you won $1000":       {"spam": 1.0, "not_spam": 0.0},
-        "team standup at 10am":                {"spam": 0.0, "not_spam": 1.0},
-        "limited offer buy now":               {"spam": 1.0, "not_spam": 0.0},
-        "please review the attached report":   {"spam": 0.0, "not_spam": 1.0},
-        "you have been selected for a prize":  {"spam": 1.0, "not_spam": 0.0},
-        "quarterly review meeting invite":     {"spam": 0.0, "not_spam": 1.0},
-    },
+_SPAM_REWARDS = {
+    "click here to win iphone":           {"spam": 1.0, "not_spam": 0.0},
+    "your invoice is attached":           {"spam": 0.0, "not_spam": 1.0},
+    "congratulations you won $1000":      {"spam": 1.0, "not_spam": 0.0},
+    "team standup at 10am":               {"spam": 0.0, "not_spam": 1.0},
+    "limited offer buy now":              {"spam": 1.0, "not_spam": 0.0},
+    "please review the attached report":  {"spam": 0.0, "not_spam": 1.0},
+    "you have been selected for a prize": {"spam": 1.0, "not_spam": 0.0},
+    "quarterly review meeting invite":    {"spam": 0.0, "not_spam": 1.0},
 }
 
-TASK_EMAIL_PRIORITY = {
-    "task_id": "email_priority",
-    "description": "Assign priority level urgent, normal, or low to each email",
-    "difficulty": "hard",
-    "actions": ["urgent", "normal", "low"],
-    "test_cases": [
-        ("server is down production issue", "urgent"),
-        ("happy birthday wishes", "low"),
-        ("client contract needs signature today", "urgent"),
-        ("newsletter subscription confirmed", "low"),
-        ("critical bug in live system", "urgent"),
-        ("weekly team lunch reminder", "low"),
-        ("urgent approval needed for budget", "urgent"),
-        ("monthly analytics report", "normal"),
-    ],
-    "reward_table": {
-        "server is down production issue":       {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-        "happy birthday wishes":                 {"urgent": 0.0, "normal": 0.3, "low": 1.0},
-        "client contract needs signature today": {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-        "newsletter subscription confirmed":     {"urgent": 0.0, "normal": 0.3, "low": 1.0},
-        "critical bug in live system":           {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-        "weekly team lunch reminder":            {"urgent": 0.0, "normal": 0.5, "low": 1.0},
-        "urgent approval needed for budget":     {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-        "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
-    },
+_PRIORITY_REWARDS = {
+    "server is down production issue":       {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "happy birthday wishes":                 {"urgent": 0.0, "normal": 0.3, "low": 1.0},
+    "client contract needs signature today": {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "newsletter subscription confirmed":     {"urgent": 0.0, "normal": 0.3, "low": 1.0},
+    "critical bug in live system":           {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "weekly team lunch reminder":            {"urgent": 0.0, "normal": 0.5, "low": 1.0},
+    "urgent approval needed for budget":     {"urgent": 1.0, "normal": 0.3, "low": 0.0},
+    "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
 }
 
-ALL_TASKS = [TASK_EMAIL_CLASSIFICATION, TASK_SPAM_DETECTION, TASK_EMAIL_PRIORITY]
-TASK_MAP = {t["task_id"]: t for t in ALL_TASKS}
+# Fixed test-case pairs used by graders (deterministic — no randomness)
+_CLASSIFICATION_CASES = [
+    ("win a lottery now!!!", "spam"),
+    ("meeting with ceo tomorrow", "important"),
+    ("huge discount just for you", "spam"),
+    ("project deadline tomorrow", "important"),
+    ("claim your prize now!!!", "spam"),
+    ("we have christmas celebration tomorrow at office", "social"),
+    ("vogue magazine 2026", "social"),
+    ("i-max theatre experience", "social"),
+]
+_SPAM_CASES = [
+    ("click here to win iphone", "spam"),
+    ("your invoice is attached", "not_spam"),
+    ("congratulations you won $1000", "spam"),
+    ("team standup at 10am", "not_spam"),
+    ("limited offer buy now", "spam"),
+    ("please review the attached report", "not_spam"),
+    ("you have been selected for a prize", "spam"),
+    ("quarterly review meeting invite", "not_spam"),
+]
+_PRIORITY_CASES = [
+    ("server is down production issue", "urgent"),
+    ("happy birthday wishes", "low"),
+    ("client contract needs signature today", "urgent"),
+    ("newsletter subscription confirmed", "low"),
+    ("critical bug in live system", "urgent"),
+    ("weekly team lunch reminder", "low"),
+    ("urgent approval needed for budget", "urgent"),
+    ("monthly analytics report", "normal"),
+]
 
-
-# ============================================================
-# GRADER - deterministic, no randomness
-# ============================================================
+# ──────────────────────────────────────────────────────────────────────────────
+# GRADER HELPERS
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _clamp(score: float) -> float:
-    """Keep score strictly in (0.0, 1.0)."""
+    """Keep score strictly inside (0.0, 1.0) as required by the spec."""
     if score <= 0.0:
         return 0.01
     if score >= 1.0:
@@ -118,108 +91,80 @@ def _clamp(score: float) -> float:
     return round(score, 4)
 
 
-def _run_task_grader(task: dict, difficulty: str) -> float:
+def _grade(cases, reward_table, mode: str) -> float:
     """
-    Run all test cases for a task and return a score in (0.0, 1.0).
-    difficulty controls which scoring mode:
-      easy   - average reward across test cases
-      medium - fraction of test cases with reward >= 0.5
-      hard   - fraction of test cases with reward == 1.0 (perfect only)
+    Run fixed test cases against the oracle (correct) action.
+    mode='easy'   → average reward (partial credit allowed)
+    mode='medium' → fraction with reward >= 0.5
+    mode='hard'   → fraction with reward == 1.0 (perfect only)
     """
-    cases = task["test_cases"]
-    rewards = task["reward_table"]
-
-    total = 0.0
-    perfect = 0
-    good = 0
-
-    for text, correct_action in cases:
-        r = rewards.get(text, {}).get(correct_action, 0.0)
+    total, perfect, good = 0.0, 0, 0
+    for text, action in cases:
+        r = reward_table.get(text, {}).get(action, 0.0)
         total += r
         if r == 1.0:
             perfect += 1
         if r >= 0.5:
             good += 1
-
     n = len(cases)
-    if difficulty == "easy":
-        score = total / n
-    elif difficulty == "medium":
-        score = good / n
-    else:  # hard
-        score = perfect / n
-
-    return _clamp(score)
+    if mode == "easy":
+        return _clamp(total / n)
+    if mode == "medium":
+        return _clamp(good / n)
+    return _clamp(perfect / n)   # hard
 
 
-def grade_task(task_id: str) -> dict:
-    """Return easy/medium/hard scores for a task."""
-    task = TASK_MAP.get(task_id)
-    if not task:
-        return {"error": f"Unknown task_id: {task_id}"}
+def _grade_all(cases, reward_table) -> dict:
     return {
-        "task_id": task_id,
-        "easy":   _run_task_grader(task, "easy"),
-        "medium": _run_task_grader(task, "medium"),
-        "hard":   _run_task_grader(task, "hard"),
+        "easy":   _grade(cases, reward_table, "easy"),
+        "medium": _grade(cases, reward_table, "medium"),
+        "hard":   _grade(cases, reward_table, "hard"),
     }
 
 
-# ============================================================
-# ENVIRONMENT (step/reset for the primary task)
-# ============================================================
+# ──────────────────────────────────────────────────────────────────────────────
+# STATE
+# ──────────────────────────────────────────────────────────────────────────────
 
-import random
+_state = {
+    "current_email": None,
+    "task_id": "email_classification",
+    "total_reward": 0.0,
+}
 
-_current_email = None
-_current_task_id = "email_classification"
-_total_reward = 0.0
-
+# ──────────────────────────────────────────────────────────────────────────────
+# REQUEST MODELS
+# ──────────────────────────────────────────────────────────────────────────────
 
 class StepRequest(BaseModel):
     action: str
     task_id: str = "email_classification"
 
-
 class GraderRequest(BaseModel):
     task_id: str
 
-
-# ============================================================
-# ROUTES
-# ============================================================
+# ──────────────────────────────────────────────────────────────────────────────
+# STANDARD ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-@app.get("/tasks")
-def list_tasks():
-    """Return all 3 tasks — required by the hackathon validator."""
-    return {
-        "tasks": [
-            {
-                "task_id": t["task_id"],
-                "description": t["description"],
-                "difficulty": t["difficulty"],
-                "actions": t["actions"],
-            }
-            for t in ALL_TASKS
-        ]
-    }
-
-
 @app.post("/reset")
 def reset(task_id: str = "email_classification"):
-    global _current_email, _current_task_id, _total_reward
-    _total_reward = 0.0
-    _current_task_id = task_id
-    task = TASK_MAP.get(task_id, TASK_EMAIL_CLASSIFICATION)
-    _current_email = random.choice([tc[0] for tc in task["test_cases"]])
+    _state["task_id"] = task_id
+    _state["total_reward"] = 0.0
+    pool = {
+        "email_classification": list(_CLASSIFICATION_REWARDS.keys()),
+        "spam_detection":       list(_SPAM_REWARDS.keys()),
+        "email_priority":       list(_PRIORITY_REWARDS.keys()),
+    }.get(task_id, list(_CLASSIFICATION_REWARDS.keys()))
+    _state["current_email"] = random.choice(pool)
     return {
-        "observation": _current_email,
-        "task_id": _current_task_id,
+        "observation": _state["current_email"],
+        "task_id": task_id,
         "reward": 0.0,
         "total_reward": 0.0,
         "done": False,
@@ -228,15 +173,18 @@ def reset(task_id: str = "email_classification"):
 
 @app.post("/step")
 def step(req: StepRequest):
-    global _total_reward
     action = req.action.lower().replace("mark_", "").strip()
-    task = TASK_MAP.get(req.task_id, TASK_EMAIL_CLASSIFICATION)
-    reward = task["reward_table"].get(_current_email or "", {}).get(action, 0.0)
-    _total_reward += reward
+    table = {
+        "email_classification": _CLASSIFICATION_REWARDS,
+        "spam_detection":       _SPAM_REWARDS,
+        "email_priority":       _PRIORITY_REWARDS,
+    }.get(req.task_id, _CLASSIFICATION_REWARDS)
+    reward = table.get(_state["current_email"] or "", {}).get(action, 0.0)
+    _state["total_reward"] += reward
     return {
-        "observation": _current_email,
+        "observation": _state["current_email"],
         "reward": reward,
-        "total_reward": _total_reward,
+        "total_reward": _state["total_reward"],
         "done": True,
     }
 
@@ -244,47 +192,83 @@ def step(req: StepRequest):
 @app.get("/state")
 def state():
     return {
-        "observation": _current_email,
-        "task_id": _current_task_id,
-        "total_reward": _total_reward,
+        "observation": _state["current_email"],
+        "task_id": _state["task_id"],
+        "total_reward": _state["total_reward"],
     }
 
 
-# ============================================================
-# GRADER ENDPOINTS - validator calls these
-# ============================================================
+# ──────────────────────────────────────────────────────────────────────────────
+# /tasks  ← validator enumerates tasks here
+# ──────────────────────────────────────────────────────────────────────────────
 
-@app.get("/grader")
-def grader_all():
-    """GET /grader — run all 3 task graders, return all scores."""
+@app.get("/tasks")
+def list_tasks():
     return {
         "tasks": [
-            grade_task(t["task_id"])
-            for t in ALL_TASKS
+            {
+                "task_id": "email_classification",
+                "description": "Classify each email as spam, important, or social",
+                "difficulty": "easy",
+                "actions": ["spam", "important", "social"],
+            },
+            {
+                "task_id": "spam_detection",
+                "description": "Detect whether an email is spam or not_spam",
+                "difficulty": "medium",
+                "actions": ["spam", "not_spam"],
+            },
+            {
+                "task_id": "email_priority",
+                "description": "Assign priority level urgent, normal, or low to an email",
+                "difficulty": "hard",
+                "actions": ["urgent", "normal", "low"],
+            },
         ]
     }
 
 
-@app.post("/grader")
-def grader_post(req: GraderRequest):
-    """POST /grader — run grader for a specific task_id."""
-    result = grade_task(req.task_id)
-    if "error" in result:
-        return result
+# ──────────────────────────────────────────────────────────────────────────────
+# /grader  ← validator runs graders here (GET + POST both supported)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _compute_grader(task_id: str):
+    if task_id == "email_classification":
+        scores = _grade_all(_CLASSIFICATION_CASES, _CLASSIFICATION_REWARDS)
+    elif task_id == "spam_detection":
+        scores = _grade_all(_SPAM_CASES, _SPAM_REWARDS)
+    elif task_id == "email_priority":
+        scores = _grade_all(_PRIORITY_CASES, _PRIORITY_REWARDS)
+    else:
+        return None
     return {
-        "task_id": result["task_id"],
-        "score": result["easy"],   # primary score
-        "scores": {
-            "easy":   result["easy"],
-            "medium": result["medium"],
-            "hard":   result["hard"],
-        },
+        "task_id": task_id,
+        "score": scores["easy"],
+        "scores": scores,
     }
 
 
-# ============================================================
-# MAIN
-# ============================================================
+@app.get("/grader")
+def grader_get():
+    """Run all 3 graders — validator may call this."""
+    results = []
+    for tid in ["email_classification", "spam_detection", "email_priority"]:
+        results.append(_compute_grader(tid))
+    return {"tasks": results}
+
+
+@app.post("/grader")
+def grader_post(req: GraderRequest):
+    """Run grader for a specific task — validator may call this."""
+    result = _compute_grader(req.task_id)
+    if result is None:
+        return {"error": f"Unknown task_id: {req.task_id}"}
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ENTRY POINT
+# ──────────────────────────────────────────────────────────────────────────────
 
 def main():
     import uvicorn
