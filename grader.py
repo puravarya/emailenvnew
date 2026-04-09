@@ -11,34 +11,34 @@ def _clamp(s: float) -> float:
 
 
 _R_CLASS = {
-    "win a lottery now!!!":                             {"spam": 1.0, "social": 0.5, "important": 0.0},
-    "meeting with ceo tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
-    "huge discount just for you":                       {"spam": 1.0, "social": 0.5, "important": 0.0},
-    "project deadline tomorrow":                        {"spam": 0.0, "social": 0.5, "important": 1.0},
-    "claim your prize now!!!":                          {"spam": 1.0, "social": 0.5, "important": 0.0},
-    "we have christmas celebration tomorrow at office": {"spam": 0.0, "social": 1.0, "important": 0.5},
-    "vogue magazine 2026":                              {"spam": 0.5, "social": 1.0, "important": 0.0},
-    "i-max theatre experience":                         {"spam": 0.5, "social": 1.0, "important": 0.0},
+    "win a lottery now!!!":                             {"spam": 0.99, "social": 0.5, "important": 0.01},
+    "meeting with ceo tomorrow":                        {"spam": 0.01, "social": 0.5, "important": 0.99},
+    "huge discount just for you":                       {"spam": 0.99, "social": 0.5, "important": 0.01},
+    "project deadline tomorrow":                        {"spam": 0.01, "social": 0.5, "important": 0.99},
+    "claim your prize now!!!":                          {"spam": 0.99, "social": 0.5, "important": 0.01},
+    "we have christmas celebration tomorrow at office": {"spam": 0.01, "social": 0.99, "important": 0.5},
+    "vogue magazine 2026":                              {"spam": 0.5,  "social": 0.99, "important": 0.01},
+    "i-max theatre experience":                         {"spam": 0.5,  "social": 0.99, "important": 0.01},
 }
 _R_SPAM = {
-    "click here to win iphone":           {"spam": 1.0, "not_spam": 0.0},
-    "your invoice is attached":           {"spam": 0.0, "not_spam": 1.0},
-    "congratulations you won $1000":      {"spam": 1.0, "not_spam": 0.0},
-    "team standup at 10am":               {"spam": 0.0, "not_spam": 1.0},
-    "limited offer buy now":              {"spam": 1.0, "not_spam": 0.0},
-    "please review the attached report":  {"spam": 0.0, "not_spam": 1.0},
-    "you have been selected for a prize": {"spam": 1.0, "not_spam": 0.0},
-    "quarterly review meeting invite":    {"spam": 0.0, "not_spam": 1.0},
+    "click here to win iphone":           {"spam": 0.99, "not_spam": 0.01},
+    "your invoice is attached":           {"spam": 0.01, "not_spam": 0.99},
+    "congratulations you won $1000":      {"spam": 0.99, "not_spam": 0.01},
+    "team standup at 10am":               {"spam": 0.01, "not_spam": 0.99},
+    "limited offer buy now":              {"spam": 0.99, "not_spam": 0.01},
+    "please review the attached report":  {"spam": 0.01, "not_spam": 0.99},
+    "you have been selected for a prize": {"spam": 0.99, "not_spam": 0.01},
+    "quarterly review meeting invite":    {"spam": 0.01, "not_spam": 0.99},
 }
 _R_PRIO = {
-    "server is down production issue":       {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-    "happy birthday wishes":                 {"urgent": 0.0, "normal": 0.3, "low": 1.0},
-    "client contract needs signature today": {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-    "newsletter subscription confirmed":     {"urgent": 0.0, "normal": 0.3, "low": 1.0},
-    "critical bug in live system":           {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-    "weekly team lunch reminder":            {"urgent": 0.0, "normal": 0.5, "low": 1.0},
-    "urgent approval needed for budget":     {"urgent": 1.0, "normal": 0.3, "low": 0.0},
-    "monthly analytics report":              {"urgent": 0.0, "normal": 1.0, "low": 0.3},
+    "server is down production issue":       {"urgent": 0.99, "normal": 0.3, "low": 0.01},
+    "happy birthday wishes":                 {"urgent": 0.01, "normal": 0.3, "low": 0.99},
+    "client contract needs signature today": {"urgent": 0.99, "normal": 0.3, "low": 0.01},
+    "newsletter subscription confirmed":     {"urgent": 0.01, "normal": 0.3, "low": 0.99},
+    "critical bug in live system":           {"urgent": 0.99, "normal": 0.3, "low": 0.01},
+    "weekly team lunch reminder":            {"urgent": 0.01, "normal": 0.5, "low": 0.99},
+    "urgent approval needed for budget":     {"urgent": 0.99, "normal": 0.3, "low": 0.01},
+    "monthly analytics report":              {"urgent": 0.01, "normal": 0.99, "low": 0.3},
 }
 
 _C_CLASS = [
@@ -74,8 +74,7 @@ _C_PRIO = [
 
 
 def _run(cases, table) -> float:
-    """Average clamped reward across all fixed test cases."""
-    total = sum(_clamp(table.get(t, {}).get(a, 0.01)) for t, a in cases)
+    total = sum(table.get(t, {}).get(a, 0.01) for t, a in cases)
     return _clamp(total / len(cases))
 
 
@@ -91,7 +90,19 @@ def grade_email_priority() -> float:
     return _run(_C_PRIO, _R_PRIO)
 
 
-# Required by openenv validate — scans for TASKS list
+# Legacy function names (kept for backward compatibility with old app.py)
+def grade_easy():   return grade_email_classification()
+def grade_medium(): return grade_email_classification()
+def grade_hard():   return grade_email_classification()
+def grade_spam_easy():     return grade_spam_detection()
+def grade_spam_medium():   return grade_spam_detection()
+def grade_spam_hard():     return grade_spam_detection()
+def grade_priority_easy():   return grade_email_priority()
+def grade_priority_medium(): return grade_email_priority()
+def grade_priority_hard():   return grade_email_priority()
+
+
+# Required by openenv validate
 TASKS = [
     {
         "task_id":     "email_classification",
@@ -109,7 +120,7 @@ TASKS = [
     },
     {
         "task_id":     "email_priority",
-        "description": "Assign priority level urgent, normal, or low to an email",
+        "description": "Assign priority level urgent, normal, or low",
         "difficulty":  "hard",
         "actions":     ["urgent", "normal", "low"],
         "grader_fn":   grade_email_priority,

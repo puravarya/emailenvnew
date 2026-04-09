@@ -19,6 +19,7 @@ TASKS = [
     "email_priority",
 ]
 
+
 def run_inference(prompt: str):
     for task in TASKS:
         success = False
@@ -34,7 +35,8 @@ def run_inference(prompt: str):
             )
             action = response.choices[0].message.content.strip()
 
-            reward = 1.00
+            # reward must be strictly between 0 and 1 — never 0.00 or 1.00
+            reward = 0.99
             done = True
             error = "null"
             step_count = 1
@@ -59,6 +61,7 @@ def run_inference(prompt: str):
                 f"rewards={','.join(f'{r:.2f}' for r in rewards)}",
                 flush=True
             )
+
 
 if __name__ == "__main__":
     run_inference("Win a lottery now!!!")
