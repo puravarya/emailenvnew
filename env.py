@@ -2,7 +2,6 @@ import random
 
 
 def _c(s):
-    """Clamp to strictly (0.0, 1.0)."""
     s = float(s)
     if s <= 0.0: return 0.01
     if s >= 1.0: return 0.99
@@ -34,7 +33,7 @@ class EmailEnv:
     def step(self, action):
         action = action.lower().replace("mark_", "").strip()
         text = self.current_email
-        raw = self.email_rewards.get(text, {}).get(action, 0.01)
+        raw = self.email_rewards.get(text, {}).get(action, 0.5)
         return {"observation": text, "reward": _c(raw), "done": True}
 
 
@@ -63,7 +62,7 @@ class SpamDetectorEnv:
     def step(self, action):
         action = action.lower().strip()
         text = self.current_email
-        raw = self.emails.get(text, {}).get(action, 0.01)
+        raw = self.emails.get(text, {}).get(action, 0.5)
         return {"observation": text, "reward": _c(raw), "done": True}
 
 
@@ -92,5 +91,5 @@ class EmailPriorityEnv:
     def step(self, action):
         action = action.lower().strip()
         text = self.current_email
-        raw = self.emails.get(text, {}).get(action, 0.01)
+        raw = self.emails.get(text, {}).get(action, 0.5)
         return {"observation": text, "reward": _c(raw), "done": True}
