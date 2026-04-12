@@ -1,25 +1,18 @@
-"""
-grader.py — Deterministic graders for all 3 tasks.
-Scores are fixed at 0.5 — strictly between 0.0 and 1.0.
-"""
-
-
-def _clamp(s: float) -> float:
+def _clamp(s):
     s = float(s)
     if s <= 0.0: return 0.01
     if s >= 1.0: return 0.99
     return round(s, 4)
 
-
 _R_CLASS = {
-    "win a lottery now!!!":                             {"spam": 0.99, "social": 0.5,  "important": 0.01},
-    "meeting with ceo tomorrow":                        {"spam": 0.01, "social": 0.5,  "important": 0.99},
-    "huge discount just for you":                       {"spam": 0.99, "social": 0.5,  "important": 0.01},
-    "project deadline tomorrow":                        {"spam": 0.01, "social": 0.5,  "important": 0.99},
-    "claim your prize now!!!":                          {"spam": 0.99, "social": 0.5,  "important": 0.01},
-    "we have christmas celebration tomorrow at office": {"spam": 0.01, "social": 0.99, "important": 0.5},
-    "vogue magazine 2026":                              {"spam": 0.5,  "social": 0.99, "important": 0.01},
-    "i-max theatre experience":                         {"spam": 0.5,  "social": 0.99, "important": 0.01},
+    "win a lottery now!!!":                             {"spam": 0.99, "social": 0.50, "important": 0.01},
+    "meeting with ceo tomorrow":                        {"spam": 0.01, "social": 0.50, "important": 0.99},
+    "huge discount just for you":                       {"spam": 0.99, "social": 0.50, "important": 0.01},
+    "project deadline tomorrow":                        {"spam": 0.01, "social": 0.50, "important": 0.99},
+    "claim your prize now!!!":                          {"spam": 0.99, "social": 0.50, "important": 0.01},
+    "we have christmas celebration tomorrow at office": {"spam": 0.01, "social": 0.99, "important": 0.50},
+    "vogue magazine 2026":                              {"spam": 0.50, "social": 0.99, "important": 0.01},
+    "i-max theatre experience":                         {"spam": 0.50, "social": 0.99, "important": 0.01},
 }
 _R_SPAM = {
     "click here to win iphone":           {"spam": 0.99, "not_spam": 0.01},
@@ -32,14 +25,14 @@ _R_SPAM = {
     "quarterly review meeting invite":    {"spam": 0.01, "not_spam": 0.99},
 }
 _R_PRIO = {
-    "server is down production issue":       {"urgent": 0.99, "normal": 0.3,  "low": 0.01},
-    "happy birthday wishes":                 {"urgent": 0.01, "normal": 0.3,  "low": 0.99},
-    "client contract needs signature today": {"urgent": 0.99, "normal": 0.3,  "low": 0.01},
-    "newsletter subscription confirmed":     {"urgent": 0.01, "normal": 0.3,  "low": 0.99},
-    "critical bug in live system":           {"urgent": 0.99, "normal": 0.3,  "low": 0.01},
-    "weekly team lunch reminder":            {"urgent": 0.01, "normal": 0.5,  "low": 0.99},
-    "urgent approval needed for budget":     {"urgent": 0.99, "normal": 0.3,  "low": 0.01},
-    "monthly analytics report":              {"urgent": 0.01, "normal": 0.99, "low": 0.3},
+    "server is down production issue":       {"urgent": 0.99, "normal": 0.30, "low": 0.01},
+    "happy birthday wishes":                 {"urgent": 0.01, "normal": 0.30, "low": 0.99},
+    "client contract needs signature today": {"urgent": 0.99, "normal": 0.30, "low": 0.01},
+    "newsletter subscription confirmed":     {"urgent": 0.01, "normal": 0.30, "low": 0.99},
+    "critical bug in live system":           {"urgent": 0.99, "normal": 0.30, "low": 0.01},
+    "weekly team lunch reminder":            {"urgent": 0.01, "normal": 0.50, "low": 0.99},
+    "urgent approval needed for budget":     {"urgent": 0.99, "normal": 0.30, "low": 0.01},
+    "monthly analytics report":              {"urgent": 0.01, "normal": 0.99, "low": 0.30},
 }
 
 _C_CLASS = [
@@ -74,28 +67,19 @@ _C_PRIO = [
 ]
 
 
-def _run(cases, table) -> float:
+def _run(cases, table):
     if not cases:
-        return 0.5
+        return 0.50
     total = 0.0
     for t, a in cases:
-        total += table.get(t, {}).get(a, 0.5)
+        total += table.get(t, {}).get(a, 0.50)
     return _clamp(total / len(cases))
 
 
-def grade_email_classification() -> float:
-    return _run(_C_CLASS, _R_CLASS)
+def grade_email_classification(): return _run(_C_CLASS, _R_CLASS)
+def grade_spam_detection():        return _run(_C_SPAM,  _R_SPAM)
+def grade_email_priority():        return _run(_C_PRIO,  _R_PRIO)
 
-
-def grade_spam_detection() -> float:
-    return _run(_C_SPAM, _R_SPAM)
-
-
-def grade_email_priority() -> float:
-    return _run(_C_PRIO, _R_PRIO)
-
-
-# Legacy aliases
 def grade_easy():            return grade_email_classification()
 def grade_medium():          return grade_email_classification()
 def grade_hard():            return grade_email_classification()
